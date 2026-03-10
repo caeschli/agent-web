@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice agent</title>
+    <style>
+        /* This perfectly centres the button inside the iframe */
+        body {
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: system-ui, sans-serif;
+            background: transparent;
+            overflow: hidden;
+        }
+
+        .agent-btn {
+            background-color: #2563eb;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .agent-btn:hover {
+            background-color: #1d4ed8;
+        }
+
+        .agent-btn:disabled {
+            background-color: #93c5fd;
+            cursor: not-allowed;
+        }
+
+        #status {
+            margin-top: 8px;
+            font-size: 14px;
+            color: #4b5563;
+            text-align: center;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <button id="connect-btn" class="agent-btn">Start voice agent</button>
+        <div id="status"></div>
+        <audio id="agent-audio" autoplay></audio>
+    </div>
+
+    <script type="module">
+        import { Room, RoomEvent } from 'https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.esm.mjs';
+
+        const connectBtn = document.getElementById('connect-btn');
+        const statusText = document.getElementById('status');
+        const audioElement = document.getElementById('agent-audio');
+
+        connectBtn.addEventListener('click', async () => {
+            connectBtn.disabled = true;
+            connectBtn.innerText = "Connecting...";
+            statusText.innerText = "Fetching secure token...";
+
+            try {
+                // IMPORTANT: Replace this with your actual Wix domain
+                const endpointUrl = 'https://www.arwendata.com/_functions/livekitToken';
+                const response = await fetch(endpointUrl);
+                const data = await response.json();
+
+                if (!data.token || !data.url) throw new Error("Failed to retrieve token");
+
+                statusText.innerText = "Connecting to LiveKit...";
+
+                const room = new Room();
+
+                room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
+                    if (track.kind === 'audio') {
+                        track.attach(audioElement);
+                        statusText.innerText = "Agent is connected and speaking!";
+                    }
+                });
+
+                room.on(RoomEvent.Disconnected, () => {
+                    statusText.innerText = "Session ended.";
+                    connectBtn.disabled = false;
+                    connectBtn.innerText = "Start voice agent";
+                });
+
+                await room.connect(data.url, data.token);
+                await room.localParticipant.setMicrophoneEnabled(true);
+
+                connectBtn.innerText = "Connected";
+                statusText.innerText = "Listening...";
+
+            } catch (error) {
+                console.error("Connection failed:", error);
+                statusText.innerText = "Error: " + error.message;
+                statusText.style.color = "red";
+                connectBtn.disabled = false;
+                connectBtn.innerText = "Try again";
+            }
+        });
+    </script>
+</body>
+
+</html>
