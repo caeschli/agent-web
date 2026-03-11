@@ -276,7 +276,7 @@
   <script>
     // ─── CONFIG ───────────────────────────────────────────────
     // Replace this with your Render token server URL after deployment
-    const TOKEN_SERVER_URL = 'https://livekit-token-server-80kc.onrender.com/token';
+    const TOKEN_SERVER_URL = 'https://YOUR-RENDER-APP.onrender.com/token';
     // ──────────────────────────────────────────────────────────
 
     const { Room, RoomEvent, Track } = LivekitClient;
@@ -342,20 +342,26 @@
         room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
           console.log('🔊 Track subscribed from', participant.identity, '— kind:', track.kind);
           if (track.kind === Track.Kind.Audio) {
+            // Use MediaStream directly via Web Audio API to bypass autoplay restrictions
+            const mediaStream = new MediaStream([track.mediaStreamTrack]);
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const source = audioCtx.createMediaStreamSource(mediaStream);
+            source.connect(audioCtx.destination);
+            audioCtx.resume().then(() => {
+              console.log('🎵 AudioContext resumed and agent audio playing via Web Audio API');
+            }).catch(e => console.error('AudioContext resume failed:', e));
+
+            // Also attach normally as fallback
             const el = track.attach();
             el.style.display = 'none';
             el.autoplay = true;
-            el.playsInline = true;
+            el.muted = false;
+            el.volume = 1.0;
             document.body.appendChild(el);
-            // Explicitly call play() and resume AudioContext to bypass autoplay restrictions
-            el.play().catch(e => console.warn('play() blocked:', e));
-            // Also resume LiveKit internal AudioContext
-            if (room.options && room.options.audioOutput) {
-              room.startAudio().catch(e => console.warn('startAudio failed:', e));
-            }
-            room.startAudio().catch(e => console.warn('startAudio:', e));
+            el.play().catch(e => console.warn('el.play() blocked:', e));
+
             visualizer.classList.add('active');
-            console.log('🎵 Agent audio attached and playing');
+            console.log('🎵 Agent audio attached via both Web Audio API and audio element');
           }
         });
 
