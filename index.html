@@ -276,7 +276,7 @@
   <script>
     // ─── CONFIG ───────────────────────────────────────────────
     // Replace this with your Render token server URL after deployment
-    const TOKEN_SERVER_URL = 'https://livekit-token-server-80kc.onrender.com/token';
+    const TOKEN_SERVER_URL = 'https://YOUR-RENDER-APP.onrender.com/token';
     // ──────────────────────────────────────────────────────────
 
     const { Room, RoomEvent, Track } = LivekitClient;
@@ -344,7 +344,16 @@
           if (track.kind === Track.Kind.Audio) {
             const el = track.attach();
             el.style.display = 'none';
+            el.autoplay = true;
+            el.playsInline = true;
             document.body.appendChild(el);
+            // Explicitly call play() and resume AudioContext to bypass autoplay restrictions
+            el.play().catch(e => console.warn('play() blocked:', e));
+            // Also resume LiveKit internal AudioContext
+            if (room.options && room.options.audioOutput) {
+              room.startAudio().catch(e => console.warn('startAudio failed:', e));
+            }
+            room.startAudio().catch(e => console.warn('startAudio:', e));
             visualizer.classList.add('active');
             console.log('🎵 Agent audio attached and playing');
           }
@@ -365,6 +374,8 @@
         });
 
         await room.connect(url, token);
+        // Unlock audio playback — must be called in response to user gesture
+        await room.startAudio();
         await room.localParticipant.setMicrophoneEnabled(true);
 
         connected = true;
