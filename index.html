@@ -276,7 +276,7 @@
   <script>
     // ─── CONFIG ───────────────────────────────────────────────
     // Replace this with your Render token server URL after deployment
-    const TOKEN_SERVER_URL = 'https://livekit-token-server-80kc.onrender.com/token';
+    const TOKEN_SERVER_URL = 'https://YOUR-RENDER-APP.onrender.com/token';
     // ──────────────────────────────────────────────────────────
 
     const { Room, RoomEvent, Track } = LivekitClient;
@@ -325,18 +325,43 @@
           setBtn('Start Conversation', '🎙', false, connect);
         });
 
-        room.on(RoomEvent.TrackSubscribed, (track) => {
+        // Log every participant joining
+        room.on(RoomEvent.ParticipantConnected, (participant) => {
+          console.log('✅ Participant joined:', participant.identity, participant.sid);
+        });
+
+        room.on(RoomEvent.ParticipantDisconnected, (participant) => {
+          console.log('❌ Participant left:', participant.identity);
+        });
+
+        // Log ALL track publications
+        room.on(RoomEvent.TrackPublished, (publication, participant) => {
+          console.log('📡 Track published by', participant.identity, '— kind:', publication.kind);
+        });
+
+        room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
+          console.log('🔊 Track subscribed from', participant.identity, '— kind:', track.kind);
           if (track.kind === Track.Kind.Audio) {
             const el = track.attach();
             el.style.display = 'none';
             document.body.appendChild(el);
             visualizer.classList.add('active');
+            console.log('🎵 Agent audio attached and playing');
           }
         });
 
-        room.on(RoomEvent.TrackUnsubscribed, (track) => {
+        room.on(RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
+          console.log('🔇 Track unsubscribed from', participant?.identity);
           track.detach();
           visualizer.classList.remove('active');
+        });
+
+        // Log existing participants already in room when we join
+        room.on(RoomEvent.Connected, () => {
+          console.log('🏠 Connected to room. Remote participants:', room.remoteParticipants.size);
+          room.remoteParticipants.forEach((p) => {
+            console.log('  existing participant:', p.identity, 'tracks:', p.trackPublications.size);
+          });
         });
 
         await room.connect(url, token);
