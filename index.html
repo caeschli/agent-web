@@ -606,7 +606,25 @@
       }
     }
 
+    // Pre-create and unlock AudioContext on user gesture (Chrome requires this)
+    let audioCtxUnlocked = false;
+    function unlockAudio() {
+      if (audioCtxUnlocked) return;
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        ctx.resume();
+        // Also prime the audio element
+        const el = document.getElementById('agentAudio');
+        el.muted = false;
+        el.volume = 1.0;
+        // Play silence to unlock
+        el.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+        el.play().then(() => { el.src = ''; audioCtxUnlocked = true; }).catch(() => {});
+      } catch(e) {}
+    }
+
     function handleOrbClick() {
+      unlockAudio(); // unlock synchronously during user gesture
       if (appState === 'idle' || appState === 'error') connect();
     }
 
@@ -652,7 +670,18 @@
             track.attach(el);
             el.muted = false;
             el.volume = 1.0;
-            el.play().catch(e => console.warn('play():', e));
+            el.play()
+              .then(() => console.log('🎵 Agent audio playing!'))
+              .catch(e => {
+                console.warn('play() blocked, retrying:', e);
+                // Retry after short delay as fallback
+                setTimeout(() => {
+                  el.muted = false;
+                  el.play()
+                    .then(() => console.log('🎵 Agent audio playing (retry)!'))
+                    .catch(e2 => console.error('play() retry failed:', e2));
+                }, 300);
+              });
           }
         });
 
