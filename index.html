@@ -931,7 +931,7 @@
     }
 
     // ─── CAMERA & GROK VISION ─────────────────────────────────
-    const XAI_API_KEY = ''; // ← paste your xai-... key here for vision analysis
+    // XAI_API_KEY lives securely on the server — never exposed in frontend
     let cameraStream = null;
     let capturedImageBase64 = null;
     let lastAnalysis = '';
@@ -1015,44 +1015,18 @@
       bubble.classList.add('visible');
 
       try {
-        if (!XAI_API_KEY) {
-          // Demo mode — no API key
-          lastAnalysis = 'Demo mode: Add your XAI_API_KEY to index.html to enable real Grok vision analysis. In production, Grok will describe what it sees in the image and suggest next steps.';
-          analysisText.textContent = lastAnalysis;
-          return;
-        }
-
-        const response = await fetch('https://api.x.ai/v1/chat/completions', {
+        // Call our secure server endpoint — XAI_API_KEY never leaves the server
+        const ANALYSE_URL = TOKEN_SERVER_URL.replace('/token', '/analyse');
+        const response = await fetch(ANALYSE_URL, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${XAI_API_KEY}`
-          },
-          body: JSON.stringify({
-            model: 'grok-2-vision-latest',
-            messages: [{
-              role: 'user',
-              content: [
-                {
-                  type: 'image_url',
-                  image_url: { url: `data:image/jpeg;base64,${capturedImageBase64}` }
-                },
-                {
-                  type: 'text',
-                  text: 'You are a trade and service business assistant. Analyse this image and provide a brief triage: (1) What is the issue or item shown? (2) How severe does it appear? (3) What trade or service is needed? Keep your response concise and practical — 2-3 sentences max.'
-                }
-              ]
-            }],
-            max_tokens: 200
-          })
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: capturedImageBase64 })
         });
 
         const data = await response.json();
-        if (data.error) throw new Error(data.error.message);
-        lastAnalysis = data.choices[0].message.content;
+        if (data.error) throw new Error(data.error);
+        lastAnalysis = data.analysis;
         analysisText.textContent = lastAnalysis;
-
-        // Also speak the analysis if connected
         console.log('📸 Grok vision analysis:', lastAnalysis);
 
       } catch (err) {
