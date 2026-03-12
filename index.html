@@ -666,22 +666,31 @@
         room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
           console.log('🔊 Audio track from:', participant.identity);
           if (track.kind === Track.Kind.Audio) {
+            console.log('🔧 mediaStreamTrack:', track.mediaStreamTrack?.readyState, track.mediaStreamTrack?.enabled);
+            
+            // Approach: use srcObject with raw MediaStream
             const el = document.getElementById('agentAudio');
-            track.attach(el);
+            const stream = new MediaStream([track.mediaStreamTrack]);
+            el.srcObject = stream;
             el.muted = false;
             el.volume = 1.0;
             el.play()
-              .then(() => console.log('🎵 Agent audio playing!'))
+              .then(() => console.log('🎵 Agent audio playing via srcObject!'))
               .catch(e => {
-                console.warn('play() blocked, retrying:', e);
-                // Retry after short delay as fallback
-                setTimeout(() => {
-                  el.muted = false;
-                  el.play()
-                    .then(() => console.log('🎵 Agent audio playing (retry)!'))
-                    .catch(e2 => console.error('play() retry failed:', e2));
-                }, 300);
+                console.error('❌ play() failed:', e.name, e.message);
               });
+
+            // Also try Web Audio API as parallel approach
+            try {
+              const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+              audioCtx.resume().then(() => {
+                const source = audioCtx.createMediaStreamSource(stream);
+                source.connect(audioCtx.destination);
+                console.log('🎵 Agent audio also routed via Web Audio API, state:', audioCtx.state);
+              });
+            } catch(e) {
+              console.warn('Web Audio API fallback failed:', e);
+            }
           }
         });
 
