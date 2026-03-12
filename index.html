@@ -497,6 +497,160 @@
     }
 
     audio { display: none; }
+
+    /* Camera button */
+    .btn-camera {
+      width: 44px;
+      height: 44px;
+      padding: 0;
+      border-radius: 50%;
+      font-size: 1.1rem;
+      display: none;
+      border-color: rgba(200,240,216,0.15);
+      color: rgba(200,240,216,0.7);
+    }
+
+    .btn-camera:hover:not(:disabled) {
+      background: rgba(200,240,216,0.08);
+      border-color: rgba(200,240,216,0.3);
+      color: var(--accent);
+    }
+
+    .btn-camera.visible { display: flex; }
+
+    /* Photo overlay */
+    .photo-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.92);
+      z-index: 200;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1.5rem;
+      padding: 2rem;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+
+    .photo-overlay.visible {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    .photo-overlay h2 {
+      font-family: 'Instrument Serif', serif;
+      font-weight: 400;
+      font-size: 1.5rem;
+      color: var(--text-primary);
+    }
+
+    .photo-overlay p {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      text-align: center;
+      max-width: 320px;
+      line-height: 1.6;
+    }
+
+    #cameraFeed {
+      width: 100%;
+      max-width: 400px;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      display: none;
+    }
+
+    #photoCanvas { display: none; }
+
+    #photoPreview {
+      width: 100%;
+      max-width: 400px;
+      border-radius: 16px;
+      border: 1px solid rgba(200,240,216,0.2);
+      display: none;
+    }
+
+    .photo-btn-row {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    /* Analysis result */
+    .analysis-bubble {
+      position: fixed;
+      bottom: 160px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100%;
+      max-width: 480px;
+      padding: 0 2rem;
+      z-index: 50;
+      display: none;
+    }
+
+    .analysis-bubble.visible { display: block; }
+
+    .analysis-bubble-inner {
+      background: rgba(200,240,216,0.05);
+      border: 1px solid rgba(200,240,216,0.15);
+      border-radius: 16px;
+      padding: 1rem 1.25rem;
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      display: flex;
+      gap: 0.75rem;
+      align-items: flex-start;
+    }
+
+    .analysis-icon { font-size: 1.1rem; flex-shrink: 0; margin-top: 0.1rem; }
+
+    .analysis-text { flex: 1; }
+
+    .analysis-label {
+      font-size: 0.7rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 0.25rem;
+      font-weight: 500;
+    }
+
+    .analysis-close {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 1rem;
+      padding: 0;
+      flex-shrink: 0;
+      line-height: 1;
+    }
+
+    .analysis-close:hover { color: var(--text-secondary); }
+
+    .photo-thumbnail {
+      position: fixed;
+      bottom: 155px;
+      right: 2rem;
+      width: 56px;
+      height: 56px;
+      border-radius: 10px;
+      object-fit: cover;
+      border: 2px solid rgba(200,240,216,0.3);
+      cursor: pointer;
+      display: none;
+      z-index: 50;
+      transition: transform 0.2s ease;
+    }
+
+    .photo-thumbnail:hover { transform: scale(1.05); }
+    .photo-thumbnail.visible { display: block; }
   </style>
 </head>
 <body>
@@ -555,6 +709,36 @@
     <div class="footer-note">Your conversation is private and not stored</div>
   </div>
 
+  <!-- Camera overlay -->
+  <div class="photo-overlay" id="photoOverlay">
+    <h2>Capture the issue</h2>
+    <p>Take a photo and Grok will analyse it and describe what it sees</p>
+    <video id="cameraFeed" autoplay playsinline></video>
+    <img id="photoPreview" alt="Captured photo" />
+    <canvas id="photoCanvas"></canvas>
+    <div class="photo-btn-row" id="photoButtons">
+      <button class="btn btn-start" id="snapBtn" onclick="snapPhoto()" style="display:none">📸 Capture</button>
+      <button class="btn btn-start" id="analyseBtn" onclick="analysePhoto()" style="display:none">🔍 Analyse with Grok</button>
+      <button class="btn btn-start" id="retakeBtn" onclick="retakePhoto()" style="display:none">↩ Retake</button>
+      <button class="btn btn-end" onclick="closeCamera()">✕ Cancel</button>
+    </div>
+  </div>
+
+  <!-- Photo thumbnail -->
+  <img id="photoThumbnail" class="photo-thumbnail" onclick="showAnalysis()" title="View analysis" />
+
+  <!-- Analysis result bubble -->
+  <div class="analysis-bubble" id="analysisBubble">
+    <div class="analysis-bubble-inner">
+      <div class="analysis-icon">🔍</div>
+      <div class="analysis-text">
+        <div class="analysis-label">Grok Vision Analysis</div>
+        <div id="analysisText"></div>
+      </div>
+      <button class="analysis-close" onclick="document.getElementById('analysisBubble').classList.remove('visible')">✕</button>
+    </div>
+  </div>
+
   <!-- Audio -->
   <audio id="agentAudio" autoplay playsinline></audio>
 
@@ -600,7 +784,10 @@
       } else if (mode === 'connecting') {
         btnGroup.innerHTML = `<button class="btn" disabled>Connecting…</button>`;
       } else if (mode === 'connected') {
-        btnGroup.innerHTML = `<button class="btn btn-end" onclick="disconnect()">End conversation</button>`;
+        btnGroup.innerHTML = `
+          <button class="btn btn-camera visible" onclick="openCamera()" title="Capture photo for Grok to analyse">📷</button>
+          <button class="btn btn-end" onclick="disconnect()">End conversation</button>
+        `;
       } else if (mode === 'error') {
         btnGroup.innerHTML = `<button class="btn btn-start" onclick="handleOrbClick()">Try again</button>`;
       }
@@ -742,6 +929,149 @@
       updateFromAttributes();
       participant.on(ParticipantEvent.AttributesChanged, updateFromAttributes);
     }
+
+    // ─── CAMERA & GROK VISION ─────────────────────────────────
+    const XAI_API_KEY = ''; // ← paste your xai-... key here for vision analysis
+    let cameraStream = null;
+    let capturedImageBase64 = null;
+    let lastAnalysis = '';
+
+    async function openCamera() {
+      document.getElementById('photoOverlay').classList.add('visible');
+      document.getElementById('cameraFeed').style.display = 'block';
+      document.getElementById('photoPreview').style.display = 'none';
+      document.getElementById('snapBtn').style.display = 'flex';
+      document.getElementById('analyseBtn').style.display = 'none';
+      document.getElementById('retakeBtn').style.display = 'none';
+      capturedImageBase64 = null;
+
+      try {
+        cameraStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false
+        });
+        document.getElementById('cameraFeed').srcObject = cameraStream;
+      } catch (err) {
+        // Fallback to front camera
+        try {
+          cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+          document.getElementById('cameraFeed').srcObject = cameraStream;
+        } catch (err2) {
+          alert('Camera access denied. Please allow camera access and try again.');
+          closeCamera();
+        }
+      }
+    }
+
+    function snapPhoto() {
+      const video = document.getElementById('cameraFeed');
+      const canvas = document.getElementById('photoCanvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext('2d').drawImage(video, 0, 0);
+
+      capturedImageBase64 = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
+
+      const preview = document.getElementById('photoPreview');
+      preview.src = canvas.toDataURL('image/jpeg', 0.85);
+      preview.style.display = 'block';
+      video.style.display = 'none';
+
+      document.getElementById('snapBtn').style.display = 'none';
+      document.getElementById('analyseBtn').style.display = 'flex';
+      document.getElementById('retakeBtn').style.display = 'flex';
+
+      // Stop camera stream
+      if (cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); cameraStream = null; }
+    }
+
+    function retakePhoto() {
+      capturedImageBase64 = null;
+      document.getElementById('photoPreview').style.display = 'none';
+      document.getElementById('cameraFeed').style.display = 'block';
+      document.getElementById('snapBtn').style.display = 'flex';
+      document.getElementById('analyseBtn').style.display = 'none';
+      document.getElementById('retakeBtn').style.display = 'none';
+      openCamera();
+    }
+
+    async function analysePhoto() {
+      if (!capturedImageBase64) return;
+
+      document.getElementById('analyseBtn').textContent = '⏳ Analysing…';
+      document.getElementById('analyseBtn').disabled = true;
+
+      // Show thumbnail
+      const thumb = document.getElementById('photoThumbnail');
+      thumb.src = 'data:image/jpeg;base64,' + capturedImageBase64;
+      thumb.classList.add('visible');
+
+      closeCamera();
+
+      // Show loading state in bubble
+      const bubble = document.getElementById('analysisBubble');
+      const analysisText = document.getElementById('analysisText');
+      analysisText.textContent = 'Analysing image…';
+      bubble.classList.add('visible');
+
+      try {
+        if (!XAI_API_KEY) {
+          // Demo mode — no API key
+          lastAnalysis = 'Demo mode: Add your XAI_API_KEY to index.html to enable real Grok vision analysis. In production, Grok will describe what it sees in the image and suggest next steps.';
+          analysisText.textContent = lastAnalysis;
+          return;
+        }
+
+        const response = await fetch('https://api.x.ai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${XAI_API_KEY}`
+          },
+          body: JSON.stringify({
+            model: 'grok-2-vision-latest',
+            messages: [{
+              role: 'user',
+              content: [
+                {
+                  type: 'image_url',
+                  image_url: { url: `data:image/jpeg;base64,${capturedImageBase64}` }
+                },
+                {
+                  type: 'text',
+                  text: 'You are a trade and service business assistant. Analyse this image and provide a brief triage: (1) What is the issue or item shown? (2) How severe does it appear? (3) What trade or service is needed? Keep your response concise and practical — 2-3 sentences max.'
+                }
+              ]
+            }],
+            max_tokens: 200
+          })
+        });
+
+        const data = await response.json();
+        if (data.error) throw new Error(data.error.message);
+        lastAnalysis = data.choices[0].message.content;
+        analysisText.textContent = lastAnalysis;
+
+        // Also speak the analysis if connected
+        console.log('📸 Grok vision analysis:', lastAnalysis);
+
+      } catch (err) {
+        console.error('Vision analysis failed:', err);
+        analysisText.textContent = 'Analysis failed: ' + err.message;
+      }
+    }
+
+    function closeCamera() {
+      if (cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); cameraStream = null; }
+      document.getElementById('photoOverlay').classList.remove('visible');
+      document.getElementById('analyseBtn').textContent = '🔍 Analyse with Grok';
+      document.getElementById('analyseBtn').disabled = false;
+    }
+
+    function showAnalysis() {
+      if (lastAnalysis) document.getElementById('analysisBubble').classList.add('visible');
+    }
+    // ──────────────────────────────────────────────────────────
 
     async function disconnect() {
       if (room) {
